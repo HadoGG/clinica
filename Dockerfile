@@ -78,5 +78,5 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
 # Expose port
 EXPOSE 8000
 
-# Run migrations and start server
-CMD ["sh", "-c", "python manage.py migrate && gunicorn clinica.wsgi:application --bind 0.0.0.0:8000 --workers 4 --timeout 120"]
+# Run migrations, create admin user, and start server
+CMD ["sh", "-c", "python manage.py migrate && python create_superuser.py && gunicorn clinica.wsgi:application --bind 0.0.0.0:8000 --workers 4 --timeout 120"]
