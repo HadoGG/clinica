@@ -8,7 +8,9 @@ RUN npm ci --prefer-offline --no-audit
 
 COPY frontend/ .
 
-RUN npm run build
+# Build con variables de entorno
+ARG VITE_API_URL=https://clinica-backend-5ffc.onrender.com/api
+RUN VITE_API_URL=$VITE_API_URL npm run build
 
 # Production
 FROM node:18-alpine
