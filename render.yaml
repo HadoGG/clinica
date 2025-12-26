@@ -1,0 +1,51 @@
+services:
+  - type: web
+    name: clinica-backend
+    env: python
+    plan: standard
+    region: oregon
+    buildCommand: |
+      cd backend && pip install -r requirements.txt && python manage.py migrate
+    startCommand: |
+      cd backend && gunicorn clinica.wsgi:application --bind 0.0.0.0:$PORT
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.11"
+      - key: DEBUG
+        value: "False"
+      - key: SECRET_KEY
+        sync: false
+      - key: ALLOWED_HOSTS
+        value: "*.onrender.com,tu-dominio.com"
+      - key: DB_ENGINE
+        value: "django.db.backends.postgresql"
+      - key: DB_NAME
+        fromDatabase:
+          name: clinica_db
+          property: database
+      - key: DB_USER
+        fromDatabase:
+          name: clinica_db
+          property: user
+      - key: DB_PASSWORD
+        fromDatabase:
+          name: clinica_db
+          property: password
+      - key: DB_HOST
+        fromDatabase:
+          name: clinica_db
+          property: host
+      - key: DB_PORT
+        value: "5432"
+
+  - type: web
+    name: clinica-frontend
+    env: static
+    plan: standard
+    region: oregon
+    buildCommand: |
+      npm install && npm run build
+    staticPublishPath: dist
+    routes:
+      - path: /
+        destination: /index.html

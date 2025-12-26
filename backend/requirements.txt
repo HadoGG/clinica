@@ -1,0 +1,24 @@
+Django==5.2.8
+djangorestframework==3.16.1
+djangorestframework-simplejwt==5.3.0
+django-cors-headers==4.3.0
+django-filter==23.5
+django-environ==0.12.0
+psycopg2-binary==2.9.9
+mysqlclient==2.2.0
+mysql-connector-python==8.2.0
+PyMySQL==1.1.0
+python-decouple==3.8
+PyJWT==2.8.0
+bcrypt==4.1.0
+gunicorn==21.2.0
+reportlab==4.0.9
+openpyxl==3.1.0
+Pillow==12.0.0
+# Caché con Redis (ACTIVADO para performance)
+redis==5.0.1
+django-redis==5.4.0
+# Tareas asincrónicas - Celery (ACTIVADO para escalabilidad)
+celery==5.3.4
+# Opcional: Para hashing más seguro con Argon2 (descomentar para máxima seguridad)
+# argon2-cffi==23.2.0

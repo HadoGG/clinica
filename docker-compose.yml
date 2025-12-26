@@ -1,0 +1,312 @@
+services:
+  # ================================================
+  # Redis (Broker + Result Backend + Cache)
+  # ================================================
+  redis:
+    image: redis:7-alpine
+    container_name: clinica_redis
+    restart: unless-stopped
+    
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    
+    expose:
+      - 6379
+    
+    volumes:
+      - redis_data:/data
+    
+    networks:
+      - clinica_network
+    
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ================================================
+  # Django Backend + Gunicorn
+  # ================================================
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: clinica_backend
+    restart: unless-stopped
+    
+    environment:
+      # Django Settings
+      DEBUG: ${DEBUG:-False}
+      SECRET_KEY: ${SECRET_KEY:-Inacap2025&}
+      ALLOWED_HOSTS: ${ALLOWED_HOSTS:-localhost,127.0.0.1,backend,clinica.local}
+      
+      # Database (Render PostgreSQL)
+      DB_ENGINE: ${DB_ENGINE:-django.db.backends.postgresql}
+      DB_NAME: ${DB_NAME:-clinica_db_lfe2}
+      DB_USER: ${DB_USER:-clinica_user}
+      DB_PASSWORD: ${DB_PASSWORD:-VKJT8ylT7LJwx7jt10lZKd7mTFyyIYDv}
+      DB_HOST: ${DB_HOST:-dpg-d5072b24d50c738ev5h0-a.oregon-postgres.render.com}
+      DB_PORT: ${DB_PORT:-5432}
+      
+      # Celery & Redis
+      CELERY_BROKER_URL: ${CELERY_BROKER_URL:-redis://redis:6379/0}
+      CELERY_RESULT_BACKEND: ${CELERY_RESULT_BACKEND:-redis://redis:6379/0}
+      CELERY_ENABLED: ${CELERY_ENABLED:-True}
+      REDIS_HOST: ${REDIS_HOST:-redis}
+      REDIS_PORT: ${REDIS_PORT:-6379}
+      ENABLE_CACHE: ${ENABLE_CACHE:-True}
+      
+      # Django Security (for production with SSL)
+      SECURE_SSL_REDIRECT: ${SECURE_SSL_REDIRECT:-False}
+      SESSION_COOKIE_SECURE: ${SESSION_COOKIE_SECURE:-False}
+      CSRF_COOKIE_SECURE: ${CSRF_COOKIE_SECURE:-False}
+      
+      # Optional: Google Cloud (only if needed)
+      GOOGLE_CLOUD_PROJECT: ${GOOGLE_CLOUD_PROJECT:-tidy-visitor-475122-j1}
+      GOOGLE_APPLICATION_CREDENTIALS: ${GOOGLE_APPLICATION_CREDENTIALS:-/app/CLOUD/tidy-visitor-475122-j1-38cd87ad9ed0.json}
+      
+      # Monitoring
+      PROMETHEUS_ENABLED: ${PROMETHEUS_ENABLED:-True}
+    
+    ports:
+      - "${BACKEND_PORT:-8000}:8000"
+    
+    volumes:
+      - ./backend:/app/backend
+      - static_files:/app/backend/staticfiles
+      - media_files:/app/backend/media
+      - ./logs:/app/backend/logs
+      - ./CLOUD:/app/CLOUD:ro
+    
+    depends_on:
+      redis:
+        condition: service_healthy
+    
+    networks:
+      - clinica_network
+    
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    
+    command: >
+      sh -c "
+      python manage.py migrate &&
+      python manage.py collectstatic --noinput &&
+      gunicorn clinica.wsgi:application --bind 0.0.0.0:8000 --workers 4 --timeout 120
+      "
+
+  # ================================================
+  # Celery Worker - Procesa Tareas Asincrónicas
+  # ================================================
+  celery-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: clinica_celery_worker
+    restart: unless-stopped
+    
+    environment:
+      DEBUG: ${DEBUG:-False}
+      SECRET_KEY: ${SECRET_KEY:-Inacap2025&}
+      ALLOWED_HOSTS: ${ALLOWED_HOSTS:-localhost,127.0.0.1,backend,clinica.local}
+      
+      # Database (Google Cloud SQL)
+      DB_ENGINE: ${DB_ENGINE:-django.db.backends.mysql}
+      DB_NAME: ${DB_NAME:-clinica_db}
+      DB_USER: ${DB_USER:-root}
+      DB_PASSWORD: ${DB_PASSWORD:-Inacap2025&}
+      DB_HOST: ${DB_HOST:-34.176.81.238}
+      DB_PORT: ${DB_PORT:-3306}
+      
+      CELERY_BROKER_URL: ${CELERY_BROKER_URL:-redis://redis:6379/0}
+      CELERY_RESULT_BACKEND: ${CELERY_RESULT_BACKEND:-redis://redis:6379/0}
+      CELERY_ENABLED: ${CELERY_ENABLED:-True}
+      REDIS_HOST: ${REDIS_HOST:-redis}
+      REDIS_PORT: ${REDIS_PORT:-6379}
+      
+      GOOGLE_CLOUD_PROJECT: ${GOOGLE_CLOUD_PROJECT:-tidy-visitor-475122-j1}
+      GOOGLE_APPLICATION_CREDENTIALS: ${GOOGLE_APPLICATION_CREDENTIALS:-/app/CLOUD/tidy-visitor-475122-j1-38cd87ad9ed0.json}
+    
+    volumes:
+      - ./backend:/app/backend
+      - ./CLOUD:/app/CLOUD:ro
+      - ./logs:/app/backend/logs
+    
+    depends_on:
+      backend:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    
+    networks:
+      - clinica_network
+    
+    command: celery -A clinica worker --loglevel=info --concurrency=4
+
+  # ================================================
+  # Celery Beat - Programador de Tareas Periódicas
+  # ================================================
+  celery-beat:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: clinica_celery_beat
+    restart: unless-stopped
+    
+    environment:
+      DEBUG: ${DEBUG:-False}
+      SECRET_KEY: ${SECRET_KEY:-Inacap2025&}
+      ALLOWED_HOSTS: ${ALLOWED_HOSTS:-localhost,127.0.0.1,backend,clinica.local}
+      
+      # Database (Google Cloud SQL)
+      DB_ENGINE: ${DB_ENGINE:-django.db.backends.mysql}
+      DB_NAME: ${DB_NAME:-clinica_db}
+      DB_USER: ${DB_USER:-root}
+      DB_PASSWORD: ${DB_PASSWORD:-Inacap2025&}
+      DB_HOST: ${DB_HOST:-34.176.81.238}
+      DB_PORT: ${DB_PORT:-3306}
+      
+      CELERY_BROKER_URL: ${CELERY_BROKER_URL:-redis://redis:6379/0}
+      CELERY_RESULT_BACKEND: ${CELERY_RESULT_BACKEND:-redis://redis:6379/0}
+      CELERY_ENABLED: ${CELERY_ENABLED:-True}
+      REDIS_HOST: ${REDIS_HOST:-redis}
+      REDIS_PORT: ${REDIS_PORT:-6379}
+      
+      GOOGLE_CLOUD_PROJECT: ${GOOGLE_CLOUD_PROJECT:-tidy-visitor-475122-j1}
+      GOOGLE_APPLICATION_CREDENTIALS: ${GOOGLE_APPLICATION_CREDENTIALS:-/app/CLOUD/tidy-visitor-475122-j1-38cd87ad9ed0.json}
+    
+    volumes:
+      - ./backend:/app/backend
+      - ./CLOUD:/app/CLOUD:ro
+    
+    depends_on:
+      backend:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    
+    networks:
+      - clinica_network
+    
+    command: celery -A clinica beat --loglevel=info --scheduler celery.beat:PersistentScheduler
+
+  # ================================================
+  # React Frontend + Nginx
+  # ================================================
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: clinica_frontend
+    restart: unless-stopped
+    
+    environment:
+      VITE_API_URL: ${VITE_API_URL:-http://localhost:8000/api}
+      NODE_ENV: ${NODE_ENV:-production}
+      PRODUCTION: ${PRODUCTION:-false}
+    
+    ports:
+      - "${FRONTEND_PORT:-3000}:80"
+      - "${FRONTEND_SSL_PORT:-443}:443"
+    
+    volumes:
+      - ./frontend/src:/app/src:ro
+      - ./frontend/public:/app/public:ro
+      - ./frontend/nginx.conf:/etc/nginx/nginx.conf:ro
+      # Static files from backend
+      - static_files:/app/backend/staticfiles:ro
+      - media_files:/app/backend/media:ro
+      # SSL Certificates (Let's Encrypt) - optional
+      - /etc/letsencrypt/live:/etc/letsencrypt/live:ro
+      - /etc/letsencrypt/archive:/etc/letsencrypt/archive:ro
+      - ./certbot/www:/var/www/certbot:ro
+    
+    depends_on:
+      backend:
+        condition: service_healthy
+    
+    networks:
+      - clinica_network
+    
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:80/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+
+  # ================================================
+  # Prometheus (Monitoring - Optional)
+  # ================================================
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: clinica_prometheus
+    restart: unless-stopped
+    
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+    
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    
+    ports:
+      - "${PROMETHEUS_PORT:-9090}:9090"
+    
+    networks:
+      - clinica_network
+    
+    depends_on:
+      - backend
+
+  # ================================================
+  # Grafana (Dashboards - Optional)
+  # ================================================
+  grafana:
+    image: grafana/grafana:latest
+    container_name: clinica_grafana
+    restart: unless-stopped
+    
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-Inacap2025&}
+      GF_USERS_ALLOW_SIGN_UP: 'false'
+    
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+    
+    ports:
+      - "${GRAFANA_PORT:-9091}:3000"
+    
+    networks:
+      - clinica_network
+    
+    depends_on:
+      - prometheus
+
+# ================================================
+# Networks
+# ================================================
+networks:
+  clinica_network:
+    driver: bridge
+
+# ================================================
+# Volumes (Persistent Data)
+# ================================================
+volumes:
+  redis_data:
+    driver: local
+  static_files:
+    driver: local
+  media_files:
+    driver: local
+  prometheus_data:
+    driver: local
+  grafana_data:
+    driver: local
