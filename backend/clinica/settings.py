@@ -186,11 +186,19 @@ CACHES = {
     }
 
 # CORS Configuration
+FRONTEND_URL = config('FRONTEND_URL', default='http://localhost:3000')
 CORS_ALLOWED_ORIGINS = [
-    config('FRONTEND_URL', default='http://localhost:3000'),
+    FRONTEND_URL,
     'http://localhost:3000',
     'http://127.0.0.1:3000',
+    'https://*.onrender.com',  # Permite cualquier frontend en Render
 ]
+
+# Wildcard para desarrollo
+if DEBUG:
+    CORS_ALLOW_ALL_ORIGINS = True
+else:
+    CORS_ALLOW_ALL_ORIGINS = False
 
 CORS_ALLOW_CREDENTIALS = True
 
