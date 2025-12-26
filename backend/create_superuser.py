@@ -8,24 +8,47 @@ django.setup()
 
 from django.contrib.auth.models import User
 
-# Crear usuario admin si no existe
-if not User.objects.filter(username='admin').exists():
-    User.objects.create_superuser(
+try:
+    # Crear usuario admin si no existe
+    admin_user, created = User.objects.get_or_create(
         username='admin',
-        email='admin@clinica.com',
-        password='Inacap2025&'
+        defaults={
+            'email': 'admin@clinica.com',
+            'is_staff': True,
+            'is_superuser': True,
+        }
     )
-    print("✅ Usuario admin creado exitosamente")
-else:
-    print("ℹ️ Usuario admin ya existe")
+    
+    if created:
+        admin_user.set_password('Inacap2025&')
+        admin_user.save()
+        print("✅ Usuario admin creado exitosamente")
+    else:
+        # Actualizar contraseña si ya existe
+        admin_user.set_password('Inacap2025&')
+        admin_user.is_staff = True
+        admin_user.is_superuser = True
+        admin_user.save()
+        print("ℹ️ Usuario admin actualizado")
 
-# Crear usuario de prueba si no existe
-if not User.objects.filter(username='test').exists():
-    User.objects.create_user(
+    # Crear usuario de prueba si no existe
+    test_user, created = User.objects.get_or_create(
         username='test',
-        email='test@clinica.com',
-        password='test123456'
+        defaults={
+            'email': 'test@clinica.com',
+        }
     )
-    print("✅ Usuario de prueba creado")
-else:
-    print("ℹ️ Usuario de prueba ya existe")
+    
+    if created:
+        test_user.set_password('test123456')
+        test_user.save()
+        print("✅ Usuario de prueba creado")
+    else:
+        print("ℹ️ Usuario de prueba ya existe")
+        
+    print(f"✅ Total de usuarios: {User.objects.count()}")
+    
+except Exception as e:
+    print(f"❌ Error creando usuarios: {e}")
+    sys.exit(1)
+
