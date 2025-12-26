@@ -191,7 +191,8 @@ CORS_ALLOWED_ORIGINS = [
     FRONTEND_URL,
     'http://localhost:3000',
     'http://127.0.0.1:3000',
-    'https://clinica-ao18.onrender.com',  # URL exacta del frontend en Render
+    'https://clinica-frontend-6daz.onrender.com',  # Nueva URL del frontend
+    'https://clinica-ao18.onrender.com',  # URL anterior (por si acaso)
 ]
 
 CORS_ALLOW_CREDENTIALS = True
